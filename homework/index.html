@@ -1,366 +1,498 @@
 <!doctype html>
-<html lang="zh-TW">
+<html lang="zh-Hant">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>作業管理器</title>
+  <title>作業未交管理器</title>
   <style>
-    body{font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Noto Sans TC', 'Microsoft JhengHei', Arial; padding:20px; background:#f7f7f9}
-    .card{background:white;border-radius:8px;padding:16px;box-shadow:0 2px 8px rgba(0,0,0,0.06);margin-bottom:16px}
-    label{display:block;margin:6px 0 4px}
-    input[type=text], input[type=number], textarea, select{width:100%;padding:8px;border:1px solid #ddd;border-radius:6px}
-    .row{display:flex;gap:12px}
-    .row > *{flex:1}
-    .grid{display:flex;gap:12px}
-    .students{display:grid;grid-template-columns:repeat(auto-fit,minmax(48px,1fr));gap:6px}
-    .stu{padding:8px;border-radius:6px;text-align:center;cursor:pointer;user-select:none;border:1px solid transparent}
-    .stu.unsubmitted{color:#999;background:#f3f3f3}
-    .stu.submitted{color:#111;background:transparent}
-    .controls{display:flex;gap:8px;flex-wrap:wrap}
-    button{padding:8px 12px;border-radius:6px;border:none;background:#2563eb;color:white;cursor:pointer}
-    button.danger{background:#ef4444}
-    .small{padding:6px 8px;font-size:0.9em}
-    table{width:100%;border-collapse:collapse}
-    th,td{padding:6px;border:1px solid #eee;text-align:left}
-    .muted{color:#666;font-size:0.95em}
-    .inline{display:inline-block}
-    .assign-list{max-height:200px;overflow:auto}
-    .hidden{display:none}
+    body { font-family: "Segoe UI", Roboto, "Noto Sans CJK TC", "Microsoft JhengHei", Arial, sans-serif; margin: 16px; color: #111; }
+    h1 { margin: 0 0 12px 0; font-size: 20px; }
+    .top { display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin-bottom:12px; }
+    .panel { border:1px solid #ddd; padding:12px; border-radius:6px; background:#fafafa; }
+    label { font-size:14px; margin-right:8px; }
+    input[type="text"], select { padding:6px 8px; border:1px solid #ccc; border-radius:4px; }
+    button { padding:6px 10px; margin-left:6px; border-radius:4px; border:1px solid #888; background:#fff; cursor:pointer; }
+    button.primary { background:#1976d2; color:#fff; border-color:#145a9a; }
+    button.danger { background:#ff4d4f; color:#fff; border-color:#a22b2b; }
+    .layout { display:flex; gap:12px; align-items:flex-start; margin-top:12px; }
+    .left { width:420px; }
+    .right { flex:1; }
+    .assign-list { display:flex; gap:6px; flex-wrap:wrap; margin-top:10px; }
+    .assign-item { padding:6px 8px; border-radius:6px; background:#fff; border:1px solid #bbb; cursor:pointer; }
+    .assign-item.selected { background:#1976d2; color:#fff; border-color:#145a9a; }
+    .grid { display:flex; flex-wrap:wrap; gap:6px; margin-top:12px; }
+    .seat { width:44px; height:36px; display:flex; align-items:center; justify-content:center; border-radius:6px; cursor:pointer; border:1px solid #999; user-select:none; }
+    .seat.missing { background:#f44336; color:#000; }
+    .seat.submitted { background:#fff; color:#000; }
+    .tables { display:flex; gap:12px; margin-top:12px; flex-wrap:wrap; }
+    table { border-collapse:collapse; width:100%; background:#fff; border:1px solid #ccc; }
+    th, td { border:1px solid #ddd; padding:6px 8px; text-align:left; font-size:13px; }
+    th { background:#f2f2f2; }
+    .table-wrap { width:100%; max-width:700px; }
+    .actions { margin-top:8px; display:flex; gap:8px; flex-wrap:wrap; }
+    .small { font-size:13px; padding:5px 8px; }
+    .note { font-size:13px; color:#555; margin-top:8px; }
   </style>
 </head>
 <body>
-  <h2>作業管理器</h2>
-  <div class="card">
-    <h3>班級管理</h3>
-    <label>新增班級名稱</label>
-    <input id="newClassName" placeholder="例如：五年乙班" />
-    <div style="margin-top:8px;display:flex;gap:8px">
-      <button id="addClass">新增班級</button>
-      <button id="deleteClass" class="danger small">刪除班級</button>
+  <h1>作業未交管理器</h1>
+
+  <div class="top">
+    <div class="panel">
+      <label>班級：</label>
+      <select id="classSelect"></select>
+      <button id="btnSelectClass" class="small">選擇班級</button>
+      <button id="btnAddClass" class="small primary">新增班級</button>
+      <button id="btnDeleteClass" class="small danger">刪除班級</button>
+      <div class="note">新增班級時請輸入班級名稱與全班座號（支援逗號與區間輸入，如 1,2,5-12）。</div>
     </div>
-    <label style="margin-top:12px">選擇班級</label>
-    <select id="classSelect"></select>
+
+    <div class="panel">
+      <label>作業：</label>
+      <input type="text" id="newAssignName" placeholder="作業名稱..." />
+      <button id="btnAddAssign" class="small primary">新增作業</button>
+      <button id="btnDeleteAssign" class="small danger">刪除作業</button>
+      <div class="note">選取某項作業後，點擊座號以標示已交 / 未交。</div>
+    </div>
+
+    <div class="panel">
+      <label>匯出：</label>
+      <button id="btnExportPDF" class="small">匯出 PDF</button>
+      <button id="btnExportXLS" class="small">匯出 XLS</button>
+    </div>
   </div>
 
-  <div class="card">
-    <h3>設定班級與學生座號</h3>
-    <label>輸入座號（支援範圍 1-30 或逗號分隔，例如：1-30 或 1,2,3,5）</label>
-    <input id="studentInput" placeholder="例如：1-30 或 1,2,3,5" />
-    <label class="muted">或直接貼上座號列表（逗號或換行分隔）</label>
-    <div style="margin-top:8px;display:flex;gap:8px">
-      <button id="loadClass">載入座號</button>
-      <button id="clearClass" class="danger small">清除班級</button>
-    </div>
-  </div>
+  <div class="layout">
+    <div class="left panel">
+      <div><strong>目前班級：</strong> <span id="currentClassName">（未選擇）</span></div>
 
-  <div class="card">
-    <h3>新增作業</h3>
-    <div class="row">
-      <div>
-        <label>作業名稱</label>
-        <input id="hwName" placeholder="例如：自然作業1" />
+      <div style="margin-top:8px;">
+        <label>設定/變更全班座號：</label><br/>
+        <input type="text" id="seatsInput" placeholder="例如 1,2,3-30" style="width:260px;" />
+        <button id="btnApplySeats" class="small">套用座號</button>
+        <div class="note">套用座號會重新建立該班級學生與清除所有作業的繳交狀態（請先備份）。</div>
       </div>
-      <div>
-        <label>作業日期</label>
-        <input id="hwDate" type="date" />
+
+      <div style="margin-top:12px;">
+        <div><strong>作業清單</strong></div>
+        <div id="assignList" class="assign-list"></div>
+      </div>
+
+      <div style="margin-top:12px;">
+        <div><strong>座號點選區（點擊切換已交/未交）</strong></div>
+        <div id="seatGrid" class="grid"></div>
       </div>
     </div>
-    <div style="margin-top:8px" class="controls">
-      <button id="addHw">新增作業</button>
-      <button id="refreshReports" class="small">更新列表</button>
-      <button id="exportXls" class="small">匯出 XLS</button>
-      <button id="exportPdf" class="small">匯出 PDF</button>
-    </div>
-  </div>
 
-  <div class="card">
-    <h3>作業清單（點選名稱以顯示/隱藏；點選學生座號切換已交/未交）</h3>
-    <div id="assignmentsArea" class="assign-list"></div>
-  </div>
-
-  <div class="card">
-    <h3>學生座號格子（點擊切換）</h3>
-    <div style="margin-bottom:8px">
-      <label>選擇要顯示的作業</label>
-      <select id="selectAssignments" multiple size="4" style="min-width:200px"></select>
-    </div>
-    <div id="studentGrid" class="students"></div>
-  </div>
-
-  <div class="card">
-    <h3>報表</h3>
-    <div style="display:flex;gap:12px;flex-wrap:wrap">
-      <div style="flex:1;min-width:300px">
-        <h4>每項作業未交學生座號</h4>
-        <div id="reportByAssignment"></div>
+    <div class="right">
+      <div class="panel table-wrap">
+        <h3 style="margin:0 0 8px 0;">每項作業的未交學生</h3>
+        <table id="assignMissingTable">
+          <thead><tr><th>作業</th><th>未交座號 (點擊可編輯)</th></tr></thead>
+          <tbody></tbody>
+        </table>
       </div>
-      <div style="flex:1;min-width:300px">
-        <h4>每位學生未交的作業項目</h4>
-        <div id="reportByStudent"></div>
+
+      <div class="panel table-wrap" style="margin-top:12px;">
+        <h3 style="margin:0 0 8px 0;">每位學生未交的作業</h3>
+        <table id="studentMissingTable">
+          <thead><tr><th>座號</th><th>未交作業 (點擊可編輯)</th></tr></thead>
+          <tbody></tbody>
+        </table>
       </div>
     </div>
   </div>
 
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.5.28/dist/jspdf.plugin.autotable.min.js"></script>
   <script>
-    // Data structure saved to localStorage
-    // per-class: { students: [1,2,3], assignments: [{id, name, date, submitted: {"1":true,...}}] }
+    // Data model in localStorage key
+    const STORAGE_KEY = "hw_manager_v1_" + (location.hostname || "local");
 
-    let CURRENT_CLASS = null;
-    const CLASS_LIST_KEY = 'homework_manager_classes';
-    function loadClasses(){ return JSON.parse(localStorage.getItem(CLASS_LIST_KEY)||'[]'); }
-    function saveClasses(list){ localStorage.setItem(CLASS_LIST_KEY, JSON.stringify(list)); }
-    function classKey(name){ return 'homework_manager_class_'+name; }
+    let data = {
+      classes: {} // className -> { seats: [numbers], assignments: { name: { submitted: {seat: true} } } }
+    };
+    let currentClass = null;
+    let selectedAssign = null;
 
-    function loadStateForCurrentClass(){
-      if(!CURRENT_CLASS) return {students:[], assignments:[]};
-      const raw = localStorage.getItem(classKey(CURRENT_CLASS));
-      return raw? JSON.parse(raw): {students:[], assignments:[]};
+    // Utilities
+    function save() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
     }
-    function saveStateForCurrentClass(state){ if(!CURRENT_CLASS) return; localStorage.setItem(classKey(CURRENT_CLASS), JSON.stringify(state)); }
-
-    function todayDateISO(){ const d=new Date(); const pad=(n)=>String(n).padStart(2,'0'); return d.getFullYear()+"-"+pad(d.getMonth()+1)+'-'+pad(d.getDate()); }
-    document.getElementById('hwDate').value = todayDateISO();
-
-    // single source of truth for UI
-    let state = loadStateForCurrentClass();
-
-    function parseStudents(input){
-      if(!input) return [];
-      input = input.replace(/\s+/g,'');
-      if(input.includes('-') && /^[0-9]+-[0-9]+$/.test(input)){
-        const [a,b]=input.split('-').map(Number);
-        const arr=[]; for(let i=Math.min(a,b);i<=Math.max(a,b);i++) arr.push(i);
-        return arr;
+    function load() {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        try {
+          data = JSON.parse(raw);
+        } catch (e) {
+          console.error("load parse error", e);
+        }
       }
-      const parts = input.split(/[,\n]+/).map(s=>s.trim()).filter(Boolean);
-      const arr = parts.map(Number).filter(n=>!isNaN(n));
-      return Array.from(new Set(arr)).sort((a,b)=>a-b);
     }
 
-    function renderAssignments(){
-      const area = document.getElementById('assignmentsArea'); area.innerHTML='';
-      const sel = document.getElementById('selectAssignments'); sel.innerHTML='';
-      state.assignments.forEach((a,idx)=>{
-        const wrap = document.createElement('div');
-        wrap.style.borderBottom='1px solid #f0f0f0'; wrap.style.padding='8px 0';
-        const h = document.createElement('div');
-        h.innerHTML = `<strong class='inline'>${a.name}</strong> <span class='muted' style='margin-left:8px'>${a.date}</span>`;
-        const btnDel = document.createElement('button'); btnDel.textContent='刪除'; btnDel.className='danger small'; btnDel.style.marginLeft='8px';
-        btnDel.onclick = ()=>{ if(confirm('確定刪除此作業？')){ state.assignments.splice(idx,1); saveStateForCurrentClass(state); renderAll(); } };
-        const btnToggle = document.createElement('button'); btnToggle.textContent='切換顯示'; btnToggle.className='small'; btnToggle.style.marginLeft='8px';
-        btnToggle.onclick = ()=>{
-          const option = [...sel.options].find(o=>o.value==a.id);
-          if(!option) return;
-          option.selected = !option.selected; renderGrid();
+    function parseSeatsInput(text) {
+      // Accept formats: "1,2,3-30,35"
+      const parts = text.split(",").map(p => p.trim()).filter(Boolean);
+      const seats = new Set();
+      for (const p of parts) {
+        if (/^\d+-\d+$/.test(p)) {
+          const [a,b] = p.split("-").map(Number);
+          if (a <= b) for (let i=a;i<=b;i++) seats.add(i);
+        } else if (/^\d+$/.test(p)) {
+          seats.add(Number(p));
         }
-        h.appendChild(btnToggle);
-        h.appendChild(btnDel);
-        wrap.appendChild(h);
-
-        // student list for this assignment
-        const stDiv = document.createElement('div'); stDiv.className='students'; stDiv.style.marginTop='8px';
-        state.students.forEach(s=>{
-          const el = document.createElement('div'); el.className='stu';
-          const submitted = a.submitted && a.submitted[String(s)];
-          el.textContent = s;
-          el.classList.toggle('submitted', !!submitted);
-          el.classList.toggle('unsubmitted', !submitted);
-          el.onclick = ()=>{
-            a.submitted = a.submitted || {};
-            a.submitted[String(s)] = !a.submitted[String(s)];
-            saveStateForCurrentClass(state); renderAll();
-          }
-          stDiv.appendChild(el);
-        });
-
-        wrap.appendChild(stDiv);
-        area.appendChild(wrap);
-
-        // add to select
-        const opt = document.createElement('option'); opt.value=a.id; opt.textContent = `${a.name} (${a.date})`; opt.selected = true;
-        sel.appendChild(opt);
-      });
+      }
+      return Array.from(seats).sort((a,b)=>a-b);
     }
 
-    function renderGrid(){
-      const grid = document.getElementById('studentGrid'); grid.innerHTML='';
-      const sel = document.getElementById('selectAssignments');
-      const chosen = Array.from(sel.selectedOptions).map(o=>o.value);
-      const assignmentsToConsider = state.assignments.filter(a=>chosen.includes(String(a.id)));
-      state.students.forEach(s=>{
-        const el = document.createElement('div'); el.className='stu';
-        // determine overall: if any selected assignment is unsubmitted -> show unsubmitted (grey)
-        let anyUnsubmitted=false; let allSubmitted=true;
-        assignmentsToConsider.forEach(a=>{
-          const sub = a.submitted && a.submitted[String(s)];
-          if(!sub) anyUnsubmitted=true;
-          if(!sub) allSubmitted=false;
-        });
-        if(assignmentsToConsider.length===0){ el.classList.add('submitted'); }
-        else if(anyUnsubmitted){ el.classList.add('unsubmitted'); }
-        else { el.classList.add('submitted'); }
-        el.textContent = s;
-        // clicking opens a small popup to toggle per assignment
-        el.onclick = ()=>{
-          // toggle submitted for the first selected assignment (if single) or show modal-like list
-          if(assignmentsToConsider.length===1){
-            const a = assignmentsToConsider[0]; a.submitted = a.submitted || {}; a.submitted[String(s)] = !a.submitted[String(s)]; saveStateForCurrentClass(state); renderAll();
-          }else{
-            // create inline editor
-            const row = document.createElement('div'); row.style.position='fixed'; row.style.left='50%'; row.style.top='50%'; row.style.transform='translate(-50%,-50%)'; row.style.background='white'; row.style.padding='12px'; row.style.boxShadow='0 6px 24px rgba(0,0,0,0.15)'; row.style.zIndex=9999; row.style.borderRadius='8px';
-            row.innerHTML = `<div style='margin-bottom:8px'><strong>座號 ${s}</strong></div>`;
-            assignmentsToConsider.forEach(a=>{
-              const cb = document.createElement('label'); cb.style.display='block'; cb.style.margin='6px 0';
-              const input = document.createElement('input'); input.type='checkbox'; input.checked = !!(a.submitted && a.submitted[String(s)]);
-              input.onchange = ()=>{ a.submitted = a.submitted || {}; a.submitted[String(s)] = input.checked; saveStateForCurrentClass(state); renderAll(); }
-              cb.appendChild(input); cb.append(` ${a.name} (${a.date})`);
-              row.appendChild(cb);
-            });
-            const close = document.createElement('button'); close.textContent='關閉'; close.className='small'; close.onclick = ()=>{ document.body.removeChild(row); };
-            row.appendChild(close);
-            document.body.appendChild(row);
-          }
+    function ensureSelectedAssign() {
+      if (!currentClass) { alert("請先選擇班級"); return false; }
+      if (!selectedAssign) { alert("請先選擇作業"); return false; }
+      return true;
+    }
+
+    // Rendering
+    function renderClassSelect() {
+      const sel = document.getElementById("classSelect");
+      sel.innerHTML = "";
+      for (const name of Object.keys(data.classes)) {
+        const opt = document.createElement("option");
+        opt.value = name; opt.textContent = name;
+        sel.appendChild(opt);
+      }
+      if (currentClass && data.classes[currentClass]) sel.value = currentClass;
+    }
+
+    function renderAssignList() {
+      const wrap = document.getElementById("assignList");
+      wrap.innerHTML = "";
+      if (!currentClass) return;
+      const assigns = Object.keys(data.classes[currentClass].assignments || {});
+      for (const name of assigns) {
+        const div = document.createElement("div");
+        div.className = "assign-item" + (name === selectedAssign ? " selected" : "");
+        div.textContent = name;
+        div.onclick = () => {
+          selectedAssign = name;
+          renderAll();
+        };
+        wrap.appendChild(div);
+      }
+    }
+
+    function renderSeatGrid() {
+      const grid = document.getElementById("seatGrid");
+      grid.innerHTML = "";
+      if (!currentClass || !selectedAssign) return;
+      const cls = data.classes[currentClass];
+      const seats = cls.seats || [];
+      const submitted = cls.assignments[selectedAssign].submitted || {};
+      for (const s of seats) {
+        const div = document.createElement("div");
+        const isSubmitted = !!submitted[s];
+        div.className = "seat " + (isSubmitted ? "submitted" : "missing");
+        div.textContent = s;
+        div.title = isSubmitted ? "已交（點擊可改為未交）" : "未交（點擊可改為已交）";
+        div.onclick = () => {
+          cls.assignments[selectedAssign].submitted[s] = isSubmitted ? false : true;
+          if (!cls.assignments[selectedAssign].submitted[s]) delete cls.assignments[selectedAssign].submitted[s];
+          save();
+          renderAll();
+        };
+        grid.appendChild(div);
+      }
+    }
+
+    function getMissingByAssignment() {
+      if (!currentClass) return {};
+      const cls = data.classes[currentClass];
+      const res = {};
+      for (const [aname, aobj] of Object.entries(cls.assignments || {})) {
+        const missing = [];
+        for (const s of cls.seats) {
+          if (!aobj.submitted || !aobj.submitted[s]) missing.push(s);
         }
-        grid.appendChild(el);
+        if (missing.length > 0) res[aname] = missing;
+      }
+      return res;
+    }
+
+    function getMissingByStudent() {
+      if (!currentClass) return {};
+      const cls = data.classes[currentClass];
+      const res = {};
+      for (const s of cls.seats) {
+        const missingAssigns = [];
+        for (const [aname, aobj] of Object.entries(cls.assignments || {})) {
+          if (!aobj.submitted || !aobj.submitted[s]) missingAssigns.push(aname);
+        }
+        if (missingAssigns.length > 0) res[s] = missingAssigns;
+      }
+      return res;
+    }
+
+    function renderAssignMissingTable() {
+      const tbody = document.querySelector("#assignMissingTable tbody");
+      tbody.innerHTML = "";
+      const map = getMissingByAssignment();
+      for (const [aname, miss] of Object.entries(map)) {
+        const tr = document.createElement("tr");
+        const tdA = document.createElement("td");
+        tdA.textContent = aname;
+        const tdB = document.createElement("td");
+        tdB.textContent = miss.join(", ");
+        tdB.style.cursor = "pointer";
+        tdB.title = "點擊編輯此項作業的未交座號";
+        tdB.onclick = () => editMissingForAssignment(aname, miss);
+        tr.appendChild(tdA); tr.appendChild(tdB);
+        tbody.appendChild(tr);
+      }
+    }
+
+    function renderStudentMissingTable() {
+      const tbody = document.querySelector("#studentMissingTable tbody");
+      tbody.innerHTML = "";
+      const map = getMissingByStudent();
+      for (const [s, assigns] of Object.entries(map)) {
+        const tr = document.createElement("tr");
+        const tdS = document.createElement("td");
+        tdS.textContent = s;
+        const tdA = document.createElement("td");
+        tdA.textContent = assigns.join(", ");
+        tdA.style.cursor = "pointer";
+        tdA.title = "點擊編輯此學生的未交作業";
+        tdA.onclick = () => editMissingForStudent(Number(s), assigns);
+        tr.appendChild(tdS); tr.appendChild(tdA);
+        tbody.appendChild(tr);
+      }
+    }
+
+    function renderCurrentInfo() {
+      document.getElementById("currentClassName").textContent = currentClass || "（未選擇）";
+      document.getElementById("seatsInput").value = currentClass ? data.classes[currentClass].seats.join(",") : "";
+    }
+
+    function renderAll() {
+      renderClassSelect();
+      renderAssignList();
+      renderSeatGrid();
+      renderAssignMissingTable();
+      renderStudentMissingTable();
+      renderCurrentInfo();
+    }
+
+    // Editing functions
+    function editMissingForAssignment(aname, currentMissing) {
+      if (!currentClass) return;
+      const cls = data.classes[currentClass];
+      const promptText = prompt(`編輯「${aname}」的未交座號 (逗號或區間，例如 1,3,5-10)。留空表示全部已交。`, currentMissing.join(", "));
+      if (promptText === null) return; // cancel
+      const newMissing = parseSeatsInput(promptText);
+      // update submitted set: submitted = seats - missing
+      const newSubmitted = {};
+      for (const s of cls.seats) {
+        if (!newMissing.includes(s)) newSubmitted[s] = true;
+      }
+      cls.assignments[aname].submitted = newSubmitted;
+      save();
+      renderAll();
+    }
+
+    function editMissingForStudent(seat, currentAssigns) {
+      if (!currentClass) return;
+      const cls = data.classes[currentClass];
+      const allAssigns = Object.keys(cls.assignments || {});
+      const promptText = prompt(`編輯座號 ${seat} 的未交作業 (輸入作業名稱並以逗號分隔)。留空表示此學生全部已交。可用的作業：${allAssigns.join(", ")}`, currentAssigns.join(", "));
+      if (promptText === null) return;
+      const parts = promptText.split(",").map(s=>s.trim()).filter(Boolean);
+      // Validate names
+      for (const p of parts) {
+        if (!allAssigns.includes(p)) {
+          if (!confirm(`作業名稱「${p}」不存在。是否要忽略它並繼續？`)) return;
+        }
+      }
+      // Update per-assignment submitted sets
+      for (const aname of allAssigns) {
+        const aobj = cls.assignments[aname];
+        if (!parts.includes(aname)) {
+          // should be marked submitted for this seat
+          aobj.submitted[seat] = true;
+        } else {
+          // should be missing
+          if (aobj.submitted[seat]) delete aobj.submitted[seat];
+        }
+      }
+      save();
+      renderAll();
+    }
+
+    // Class / assignment management
+    function addClass() {
+      const name = prompt("輸入班級名稱（例如：高三1班）:");
+      if (!name) return;
+      if (data.classes[name]) { alert("已存在同名班級"); return; }
+      const seatsText = prompt("輸入全班座號（例如 1,2,3-30）:");
+      if (seatsText === null) return;
+      const seats = parseSeatsInput(seatsText);
+      if (seats.length === 0) { alert("未能解析出任何座號，請重新操作。"); return; }
+      data.classes[name] = { seats: seats, assignments: {} };
+      currentClass = name;
+      selectedAssign = null;
+      save();
+      renderAll();
+    }
+
+    function deleteClass() {
+      if (!currentClass) { alert("尚未選擇班級"); return; }
+      if (!confirm(`確定要刪除班級 "${currentClass}" 及其所有資料嗎？此動作不可還原。`)) return;
+      delete data.classes[currentClass];
+      currentClass = null;
+      selectedAssign = null;
+      save();
+      renderAll();
+    }
+
+    function selectClass() {
+      const sel = document.getElementById("classSelect");
+      const name = sel.value;
+      if (!name) { alert("請先建立班級"); return; }
+      currentClass = name;
+      selectedAssign = null;
+      renderAll();
+    }
+
+    function applySeats() {
+      if (!currentClass) { alert("請先選擇班級"); return; }
+      const txt = document.getElementById("seatsInput").value.trim();
+      if (!txt) { alert("請輸入座號"); return; }
+      if (!confirm("套用座號會重新建立該班級學生並清除所有作業繳交狀態。是否繼續？")) return;
+      const seats = parseSeatsInput(txt);
+      if (seats.length === 0) { alert("未解析出座號"); return; }
+      // reset seats and clear assignment submissions
+      data.classes[currentClass].seats = seats;
+      for (const a of Object.values(data.classes[currentClass].assignments || {})) {
+        a.submitted = {}; // all reset to 未交
+      }
+      save();
+      renderAll();
+    }
+
+    function addAssign() {
+      if (!currentClass) { alert("請先選擇班級"); return; }
+      const name = document.getElementById("newAssignName").value.trim();
+      if (!name) { alert("請輸入作業名稱"); return; }
+      const cls = data.classes[currentClass];
+      if (!cls.assignments) cls.assignments = {};
+      if (cls.assignments[name]) { alert("此作業已存在"); return; }
+      // default: 所有學生都未交 (submitted = {})
+      cls.assignments[name] = { submitted: {} };
+      selectedAssign = name;
+      document.getElementById("newAssignName").value = "";
+      save();
+      renderAll();
+    }
+
+    function deleteAssign() {
+      if (!currentClass) { alert("請先選擇班級"); return; }
+      if (!selectedAssign) { alert("請先選取欲刪除的作業"); return; }
+      if (!confirm(`確定要刪除作業 "${selectedAssign}" 嗎？`)) return;
+      delete data.classes[currentClass].assignments[selectedAssign];
+      selectedAssign = null;
+      save();
+      renderAll();
+    }
+
+    // Export
+    function exportPDF() {
+      if (!currentClass) { alert("請先選擇班級"); return; }
+      // Open new window with printable content
+      const cls = data.classes[currentClass];
+      const mapA = getMissingByAssignment();
+      const mapS = getMissingByStudent();
+      let html = "<html><head><meta charset='utf-8'><title>未交報表</title>";
+      html += "<style>body{font-family:Arial,Helvetica,sans-serif;padding:18px}h2{margin:8px 0}table{border-collapse:collapse;width:100%;margin-bottom:12px}th,td{border:1px solid #666;padding:6px}</style></head><body>";
+      html += `<h1>班級：${currentClass}</h1>`;
+      html += `<h2>每項作業的未交學生</h2>`;
+      html += "<table><thead><tr><th>作業</th><th>未交座號</th></tr></thead><tbody>";
+      for (const [an, arr] of Object.entries(mapA)) {
+        html += `<tr><td>${an}</td><td>${arr.join(", ")}</td></tr>`;
+      }
+      html += "</tbody></table>";
+      html += `<h2>每位學生未交的作業</h2>`;
+      html += "<table><thead><tr><th>座號</th><th>未交作業</th></tr></thead><tbody>";
+      for (const [s, arr] of Object.entries(mapS)) {
+        html += `<tr><td>${s}</td><td>${arr.join(", ")}</td></tr>`;
+      }
+      html += "</tbody></table>";
+      html += "</body></html>";
+      const w = window.open("", "_blank");
+      w.document.write(html);
+      w.document.close();
+      // wait then print
+      w.focus();
+      setTimeout(()=>{ w.print(); }, 500);
+    }
+
+    function exportXLS() {
+      if (!currentClass) { alert("請先選擇班級"); return; }
+      const mapA = getMissingByAssignment();
+      const mapS = getMissingByStudent();
+      // Create a simple HTML workbook (works with Excel)
+      let html = "<html xmlns:x='urn:schemas-microsoft-com:office:excel'><head><meta charset='utf-8'><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets>";
+      html += "<x:ExcelWorksheet><x:Name>每項作業未交</x:Name><x:WorksheetOptions/></x:ExcelWorksheet>";
+      html += "<x:ExcelWorksheet><x:Name>每位學生未交</x:Name><x:WorksheetOptions/></x:ExcelWorksheet>";
+      html += "</x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]--></head><body>";
+      html += "<table><tr><th colspan='2'>每項作業的未交學生</th></tr>";
+      html += "<tr><th>作業</th><th>未交座號</th></tr>";
+      for (const [an, arr] of Object.entries(mapA)) {
+        html += `<tr><td>${an}</td><td>${arr.join(", ")}</td></tr>`;
+      }
+      html += "</table><br/>";
+      html += "<table><tr><th colspan='2'>每位學生未交的作業</th></tr>";
+      html += "<tr><th>座號</th><th>未交作業</th></tr>";
+      for (const [s, arr] of Object.entries(mapS)) {
+        html += `<tr><td>${s}</td><td>${arr.join(", ")}</td></tr>`;
+      }
+      html += "</table></body></html>";
+      const blob = new Blob([html], { type: 'application/vnd.ms-excel' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${currentClass}_未交名單.xls`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    // Init
+    function init() {
+      load();
+      renderAll();
+
+      // wire events
+      document.getElementById("btnAddClass").onclick = addClass;
+      document.getElementById("btnDeleteClass").onclick = deleteClass;
+      document.getElementById("btnSelectClass").onclick = selectClass;
+      document.getElementById("btnApplySeats").onclick = applySeats;
+      document.getElementById("btnAddAssign").onclick = addAssign;
+      document.getElementById("btnDeleteAssign").onclick = deleteAssign;
+      document.getElementById("btnExportPDF").onclick = exportPDF;
+      document.getElementById("btnExportXLS").onclick = exportXLS;
+
+      // when class dropdown changes, select new
+      document.getElementById("classSelect").onchange = (e) => {
+        currentClass = e.target.value;
+        selectedAssign = null;
+        renderAll();
+      };
+
+      // keyboard: Enter to add assignment
+      document.getElementById("newAssignName").addEventListener("keydown", (e)=>{
+        if (e.key === "Enter") addAssign();
       });
     }
 
-    function renderReports(){
-      const byA = document.getElementById('reportByAssignment'); byA.innerHTML='';
-      state.assignments.forEach(a=>{
-        const missing = state.students.filter(s=>!(a.submitted && a.submitted[String(s)]));
-        if(missing.length===0) return; // don't show if all submitted
-        const div = document.createElement('div'); div.style.marginBottom='8px';
-        div.innerHTML = `<strong>${a.name} (${a.date})</strong>: <span class='muted'>${missing.join(', ')}</span>`;
-        byA.appendChild(div);
-      });
-
-      const byS = document.getElementById('reportByStudent'); byS.innerHTML='';
-      state.students.forEach(s=>{
-        const missing = state.assignments.filter(a=>!(a.submitted && a.submitted[String(s)]) ).map(a=>a.name+`(${a.date})`);
-        if(missing.length===0) return;
-        const div = document.createElement('div'); div.style.marginBottom='8px';
-        div.innerHTML = `<strong>座號 ${s}</strong>: <span class='muted'>${missing.join('; ')}</span>`;
-        byS.appendChild(div);
-      });
-    }
-
-    function renderAll(){ renderAssignments(); renderGrid(); renderReports(); }
-
-    // handlers
-    document.getElementById('loadClass').onclick = ()=>{
-      const raw = document.getElementById('studentInput').value;
-      const arr = parseStudents(raw);
-      if(arr.length===0){ alert('找不到任何座號'); return; }
-      state.students = arr; // reset
-      // ensure assignments' submitted maps have keys for these students (optional)
-      saveStateForCurrentClass(state); renderAll();
-    }
-    document.getElementById('addHw').onclick = ()=>{
-      if(!CURRENT_CLASS){ alert('請先選擇或新增班級'); return; }
-      const name = document.getElementById('hwName').value.trim();
-      const date = document.getElementById('hwDate').value || todayDateISO();
-      if(!name){ alert('請輸入作業名稱'); return; }
-      const id = Date.now();
-      const submitted = {};
-      // default: everyone unsubmitted (false)
-      state.assignments.push({id, name, date, submitted});
-      saveStateForCurrentClass(state); renderAll();
-      document.getElementById('hwName').value='';
-    }
-
-    document.getElementById('refreshReports').onclick = ()=>{ renderReports(); }
-
-    document.getElementById('clearClass').onclick = ()=>{ if(!CURRENT_CLASS){ alert('請先選擇班級'); return; } if(confirm('清除班級座號與所有繳交紀錄？')){ state.students=[]; state.assignments=[]; saveStateForCurrentClass(state); renderAll(); }}
-
-    // export XLS
-    document.getElementById('exportXls').onclick = ()=>{
-      const wb = XLSX.utils.book_new();
-      // sheet1: assignments with missing
-      const rows = [];
-      state.assignments.forEach(a=>{
-        const missing = state.students.filter(s=>!(a.submitted && a.submitted[String(s)]) ).join(', ');
-        if(missing.length>0) rows.push({作業名稱:a.name, 日期:a.date, 未交座號:missing});
-      });
-      const ws1 = XLSX.utils.json_to_sheet(rows);
-      XLSX.utils.book_append_sheet(wb, ws1, '作業未交');
-      // sheet2: students missing
-      const rows2 = state.students.map(s=>{
-        const miss = state.assignments.filter(a=>!(a.submitted && a.submitted[String(s)]) ).map(a=>a.name+`(${a.date})`).join('; ');
-        return {座號:s, 未交: miss};
-      }).filter(r=>r.未交.length>0);
-      const ws2 = XLSX.utils.json_to_sheet(rows2);
-      XLSX.utils.book_append_sheet(wb, ws2, '學生未交');
-      XLSX.writeFile(wb, 'homework_report.xlsx');
-    }
-
-    // export PDF
-    document.getElementById('exportPdf').onclick = ()=>{
-      const { jsPDF } = window.jspdf;
-      const doc = new jsPDF();
-      let y = 10;
-      doc.setFontSize(12); doc.text('作業未交報表', 10, y); y+=6;
-      state.assignments.forEach(a=>{
-        const missing = state.students.filter(s=>!(a.submitted && a.submitted[String(s)]) );
-        if(missing.length===0) return;
-        doc.setFontSize(10);
-        doc.text(`${a.name} (${a.date}): ${missing.join(', ')}`, 10, y);
-        y+=6; if(y>280){ doc.addPage(); y=10; }
-      });
-      doc.addPage(); y=10; doc.text('學生未交報表',10,y); y+=6;
-      state.students.forEach(s=>{
-        const miss = state.assignments.filter(a=>!(a.submitted && a.submitted[String(s)]) ).map(a=>a.name+`(${a.date})`);
-        if(miss.length===0) return;
-        doc.text(`座號 ${s}: ${miss.join('; ')}`, 10, y);
-        y+=6; if(y>280){ doc.addPage(); y=10; }
-      });
-      doc.save('homework_report.pdf');
-    }
-
-    // 班級管理初始化
-    function renderClassSelect(){
-      const sel = document.getElementById('classSelect');
-      const list = loadClasses();
-      sel.innerHTML='';
-      list.forEach(c=>{
-        const opt=document.createElement('option'); opt.value=c; opt.textContent=c;
-        if(c===CURRENT_CLASS) opt.selected=true;
-        sel.appendChild(opt);
-      });
-    }
-    document.getElementById('addClass').onclick = ()=>{
-      const name = document.getElementById('newClassName').value.trim();
-      if(!name){ alert('請輸入班級名稱'); return; }
-      const list = loadClasses(); if(list.includes(name)){ alert('班級已存在'); return; }
-      list.push(name); saveClasses(list);
-      CURRENT_CLASS = name; state = loadStateForCurrentClass(); saveStateForCurrentClass(state);
-      renderClassSelect(); renderAll(); document.getElementById('newClassName').value='';
-    }
-    document.getElementById('classSelect').onchange = (e)=>{
-      CURRENT_CLASS = e.target.value;
-      state = loadStateForCurrentClass(); renderAll();
-    }
-    document.getElementById('deleteClass').onclick = ()=>{
-      if(!CURRENT_CLASS){ alert('尚未選擇班級'); return; }
-      if(!confirm('確定刪除此班級？')) return;
-      const list = loadClasses().filter(c=>c!==CURRENT_CLASS);
-      saveClasses(list);
-      localStorage.removeItem(classKey(CURRENT_CLASS));
-      CURRENT_CLASS = list[0] || null;
-      state = loadStateForCurrentClass(); renderClassSelect(); renderAll();
-    }
-
-    renderClassSelect();
-
-    // initial demo state (only if empty)
-    if(state.students.length===0 && state.assignments.length===0){
-      // don't prefill automatically; leave blank for teacher to input
-    }
-
-    renderAll();
+    // Run
+    init();
   </script>
 </body>
 </html>
