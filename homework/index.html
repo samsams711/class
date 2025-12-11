@@ -1,0 +1,366 @@
+<!doctype html>
+<html lang="zh-TW">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>作業管理器</title>
+  <style>
+    body{font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Noto Sans TC', 'Microsoft JhengHei', Arial; padding:20px; background:#f7f7f9}
+    .card{background:white;border-radius:8px;padding:16px;box-shadow:0 2px 8px rgba(0,0,0,0.06);margin-bottom:16px}
+    label{display:block;margin:6px 0 4px}
+    input[type=text], input[type=number], textarea, select{width:100%;padding:8px;border:1px solid #ddd;border-radius:6px}
+    .row{display:flex;gap:12px}
+    .row > *{flex:1}
+    .grid{display:flex;gap:12px}
+    .students{display:grid;grid-template-columns:repeat(auto-fit,minmax(48px,1fr));gap:6px}
+    .stu{padding:8px;border-radius:6px;text-align:center;cursor:pointer;user-select:none;border:1px solid transparent}
+    .stu.unsubmitted{color:#999;background:#f3f3f3}
+    .stu.submitted{color:#111;background:transparent}
+    .controls{display:flex;gap:8px;flex-wrap:wrap}
+    button{padding:8px 12px;border-radius:6px;border:none;background:#2563eb;color:white;cursor:pointer}
+    button.danger{background:#ef4444}
+    .small{padding:6px 8px;font-size:0.9em}
+    table{width:100%;border-collapse:collapse}
+    th,td{padding:6px;border:1px solid #eee;text-align:left}
+    .muted{color:#666;font-size:0.95em}
+    .inline{display:inline-block}
+    .assign-list{max-height:200px;overflow:auto}
+    .hidden{display:none}
+  </style>
+</head>
+<body>
+  <h2>作業管理器</h2>
+  <div class="card">
+    <h3>班級管理</h3>
+    <label>新增班級名稱</label>
+    <input id="newClassName" placeholder="例如：五年乙班" />
+    <div style="margin-top:8px;display:flex;gap:8px">
+      <button id="addClass">新增班級</button>
+      <button id="deleteClass" class="danger small">刪除班級</button>
+    </div>
+    <label style="margin-top:12px">選擇班級</label>
+    <select id="classSelect"></select>
+  </div>
+
+  <div class="card">
+    <h3>設定班級與學生座號</h3>
+    <label>輸入座號（支援範圍 1-30 或逗號分隔，例如：1-30 或 1,2,3,5）</label>
+    <input id="studentInput" placeholder="例如：1-30 或 1,2,3,5" />
+    <label class="muted">或直接貼上座號列表（逗號或換行分隔）</label>
+    <div style="margin-top:8px;display:flex;gap:8px">
+      <button id="loadClass">載入座號</button>
+      <button id="clearClass" class="danger small">清除班級</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>新增作業</h3>
+    <div class="row">
+      <div>
+        <label>作業名稱</label>
+        <input id="hwName" placeholder="例如：自然作業1" />
+      </div>
+      <div>
+        <label>作業日期</label>
+        <input id="hwDate" type="date" />
+      </div>
+    </div>
+    <div style="margin-top:8px" class="controls">
+      <button id="addHw">新增作業</button>
+      <button id="refreshReports" class="small">更新列表</button>
+      <button id="exportXls" class="small">匯出 XLS</button>
+      <button id="exportPdf" class="small">匯出 PDF</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>作業清單（點選名稱以顯示/隱藏；點選學生座號切換已交/未交）</h3>
+    <div id="assignmentsArea" class="assign-list"></div>
+  </div>
+
+  <div class="card">
+    <h3>學生座號格子（點擊切換）</h3>
+    <div style="margin-bottom:8px">
+      <label>選擇要顯示的作業</label>
+      <select id="selectAssignments" multiple size="4" style="min-width:200px"></select>
+    </div>
+    <div id="studentGrid" class="students"></div>
+  </div>
+
+  <div class="card">
+    <h3>報表</h3>
+    <div style="display:flex;gap:12px;flex-wrap:wrap">
+      <div style="flex:1;min-width:300px">
+        <h4>每項作業未交學生座號</h4>
+        <div id="reportByAssignment"></div>
+      </div>
+      <div style="flex:1;min-width:300px">
+        <h4>每位學生未交的作業項目</h4>
+        <div id="reportByStudent"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.5.28/dist/jspdf.plugin.autotable.min.js"></script>
+  <script>
+    // Data structure saved to localStorage
+    // per-class: { students: [1,2,3], assignments: [{id, name, date, submitted: {"1":true,...}}] }
+
+    let CURRENT_CLASS = null;
+    const CLASS_LIST_KEY = 'homework_manager_classes';
+    function loadClasses(){ return JSON.parse(localStorage.getItem(CLASS_LIST_KEY)||'[]'); }
+    function saveClasses(list){ localStorage.setItem(CLASS_LIST_KEY, JSON.stringify(list)); }
+    function classKey(name){ return 'homework_manager_class_'+name; }
+
+    function loadStateForCurrentClass(){
+      if(!CURRENT_CLASS) return {students:[], assignments:[]};
+      const raw = localStorage.getItem(classKey(CURRENT_CLASS));
+      return raw? JSON.parse(raw): {students:[], assignments:[]};
+    }
+    function saveStateForCurrentClass(state){ if(!CURRENT_CLASS) return; localStorage.setItem(classKey(CURRENT_CLASS), JSON.stringify(state)); }
+
+    function todayDateISO(){ const d=new Date(); const pad=(n)=>String(n).padStart(2,'0'); return d.getFullYear()+"-"+pad(d.getMonth()+1)+'-'+pad(d.getDate()); }
+    document.getElementById('hwDate').value = todayDateISO();
+
+    // single source of truth for UI
+    let state = loadStateForCurrentClass();
+
+    function parseStudents(input){
+      if(!input) return [];
+      input = input.replace(/\s+/g,'');
+      if(input.includes('-') && /^[0-9]+-[0-9]+$/.test(input)){
+        const [a,b]=input.split('-').map(Number);
+        const arr=[]; for(let i=Math.min(a,b);i<=Math.max(a,b);i++) arr.push(i);
+        return arr;
+      }
+      const parts = input.split(/[,\n]+/).map(s=>s.trim()).filter(Boolean);
+      const arr = parts.map(Number).filter(n=>!isNaN(n));
+      return Array.from(new Set(arr)).sort((a,b)=>a-b);
+    }
+
+    function renderAssignments(){
+      const area = document.getElementById('assignmentsArea'); area.innerHTML='';
+      const sel = document.getElementById('selectAssignments'); sel.innerHTML='';
+      state.assignments.forEach((a,idx)=>{
+        const wrap = document.createElement('div');
+        wrap.style.borderBottom='1px solid #f0f0f0'; wrap.style.padding='8px 0';
+        const h = document.createElement('div');
+        h.innerHTML = `<strong class='inline'>${a.name}</strong> <span class='muted' style='margin-left:8px'>${a.date}</span>`;
+        const btnDel = document.createElement('button'); btnDel.textContent='刪除'; btnDel.className='danger small'; btnDel.style.marginLeft='8px';
+        btnDel.onclick = ()=>{ if(confirm('確定刪除此作業？')){ state.assignments.splice(idx,1); saveStateForCurrentClass(state); renderAll(); } };
+        const btnToggle = document.createElement('button'); btnToggle.textContent='切換顯示'; btnToggle.className='small'; btnToggle.style.marginLeft='8px';
+        btnToggle.onclick = ()=>{
+          const option = [...sel.options].find(o=>o.value==a.id);
+          if(!option) return;
+          option.selected = !option.selected; renderGrid();
+        }
+        h.appendChild(btnToggle);
+        h.appendChild(btnDel);
+        wrap.appendChild(h);
+
+        // student list for this assignment
+        const stDiv = document.createElement('div'); stDiv.className='students'; stDiv.style.marginTop='8px';
+        state.students.forEach(s=>{
+          const el = document.createElement('div'); el.className='stu';
+          const submitted = a.submitted && a.submitted[String(s)];
+          el.textContent = s;
+          el.classList.toggle('submitted', !!submitted);
+          el.classList.toggle('unsubmitted', !submitted);
+          el.onclick = ()=>{
+            a.submitted = a.submitted || {};
+            a.submitted[String(s)] = !a.submitted[String(s)];
+            saveStateForCurrentClass(state); renderAll();
+          }
+          stDiv.appendChild(el);
+        });
+
+        wrap.appendChild(stDiv);
+        area.appendChild(wrap);
+
+        // add to select
+        const opt = document.createElement('option'); opt.value=a.id; opt.textContent = `${a.name} (${a.date})`; opt.selected = true;
+        sel.appendChild(opt);
+      });
+    }
+
+    function renderGrid(){
+      const grid = document.getElementById('studentGrid'); grid.innerHTML='';
+      const sel = document.getElementById('selectAssignments');
+      const chosen = Array.from(sel.selectedOptions).map(o=>o.value);
+      const assignmentsToConsider = state.assignments.filter(a=>chosen.includes(String(a.id)));
+      state.students.forEach(s=>{
+        const el = document.createElement('div'); el.className='stu';
+        // determine overall: if any selected assignment is unsubmitted -> show unsubmitted (grey)
+        let anyUnsubmitted=false; let allSubmitted=true;
+        assignmentsToConsider.forEach(a=>{
+          const sub = a.submitted && a.submitted[String(s)];
+          if(!sub) anyUnsubmitted=true;
+          if(!sub) allSubmitted=false;
+        });
+        if(assignmentsToConsider.length===0){ el.classList.add('submitted'); }
+        else if(anyUnsubmitted){ el.classList.add('unsubmitted'); }
+        else { el.classList.add('submitted'); }
+        el.textContent = s;
+        // clicking opens a small popup to toggle per assignment
+        el.onclick = ()=>{
+          // toggle submitted for the first selected assignment (if single) or show modal-like list
+          if(assignmentsToConsider.length===1){
+            const a = assignmentsToConsider[0]; a.submitted = a.submitted || {}; a.submitted[String(s)] = !a.submitted[String(s)]; saveStateForCurrentClass(state); renderAll();
+          }else{
+            // create inline editor
+            const row = document.createElement('div'); row.style.position='fixed'; row.style.left='50%'; row.style.top='50%'; row.style.transform='translate(-50%,-50%)'; row.style.background='white'; row.style.padding='12px'; row.style.boxShadow='0 6px 24px rgba(0,0,0,0.15)'; row.style.zIndex=9999; row.style.borderRadius='8px';
+            row.innerHTML = `<div style='margin-bottom:8px'><strong>座號 ${s}</strong></div>`;
+            assignmentsToConsider.forEach(a=>{
+              const cb = document.createElement('label'); cb.style.display='block'; cb.style.margin='6px 0';
+              const input = document.createElement('input'); input.type='checkbox'; input.checked = !!(a.submitted && a.submitted[String(s)]);
+              input.onchange = ()=>{ a.submitted = a.submitted || {}; a.submitted[String(s)] = input.checked; saveStateForCurrentClass(state); renderAll(); }
+              cb.appendChild(input); cb.append(` ${a.name} (${a.date})`);
+              row.appendChild(cb);
+            });
+            const close = document.createElement('button'); close.textContent='關閉'; close.className='small'; close.onclick = ()=>{ document.body.removeChild(row); };
+            row.appendChild(close);
+            document.body.appendChild(row);
+          }
+        }
+        grid.appendChild(el);
+      });
+    }
+
+    function renderReports(){
+      const byA = document.getElementById('reportByAssignment'); byA.innerHTML='';
+      state.assignments.forEach(a=>{
+        const missing = state.students.filter(s=>!(a.submitted && a.submitted[String(s)]));
+        if(missing.length===0) return; // don't show if all submitted
+        const div = document.createElement('div'); div.style.marginBottom='8px';
+        div.innerHTML = `<strong>${a.name} (${a.date})</strong>: <span class='muted'>${missing.join(', ')}</span>`;
+        byA.appendChild(div);
+      });
+
+      const byS = document.getElementById('reportByStudent'); byS.innerHTML='';
+      state.students.forEach(s=>{
+        const missing = state.assignments.filter(a=>!(a.submitted && a.submitted[String(s)]) ).map(a=>a.name+`(${a.date})`);
+        if(missing.length===0) return;
+        const div = document.createElement('div'); div.style.marginBottom='8px';
+        div.innerHTML = `<strong>座號 ${s}</strong>: <span class='muted'>${missing.join('; ')}</span>`;
+        byS.appendChild(div);
+      });
+    }
+
+    function renderAll(){ renderAssignments(); renderGrid(); renderReports(); }
+
+    // handlers
+    document.getElementById('loadClass').onclick = ()=>{
+      const raw = document.getElementById('studentInput').value;
+      const arr = parseStudents(raw);
+      if(arr.length===0){ alert('找不到任何座號'); return; }
+      state.students = arr; // reset
+      // ensure assignments' submitted maps have keys for these students (optional)
+      saveStateForCurrentClass(state); renderAll();
+    }
+    document.getElementById('addHw').onclick = ()=>{
+      if(!CURRENT_CLASS){ alert('請先選擇或新增班級'); return; }
+      const name = document.getElementById('hwName').value.trim();
+      const date = document.getElementById('hwDate').value || todayDateISO();
+      if(!name){ alert('請輸入作業名稱'); return; }
+      const id = Date.now();
+      const submitted = {};
+      // default: everyone unsubmitted (false)
+      state.assignments.push({id, name, date, submitted});
+      saveStateForCurrentClass(state); renderAll();
+      document.getElementById('hwName').value='';
+    }
+
+    document.getElementById('refreshReports').onclick = ()=>{ renderReports(); }
+
+    document.getElementById('clearClass').onclick = ()=>{ if(!CURRENT_CLASS){ alert('請先選擇班級'); return; } if(confirm('清除班級座號與所有繳交紀錄？')){ state.students=[]; state.assignments=[]; saveStateForCurrentClass(state); renderAll(); }}
+
+    // export XLS
+    document.getElementById('exportXls').onclick = ()=>{
+      const wb = XLSX.utils.book_new();
+      // sheet1: assignments with missing
+      const rows = [];
+      state.assignments.forEach(a=>{
+        const missing = state.students.filter(s=>!(a.submitted && a.submitted[String(s)]) ).join(', ');
+        if(missing.length>0) rows.push({作業名稱:a.name, 日期:a.date, 未交座號:missing});
+      });
+      const ws1 = XLSX.utils.json_to_sheet(rows);
+      XLSX.utils.book_append_sheet(wb, ws1, '作業未交');
+      // sheet2: students missing
+      const rows2 = state.students.map(s=>{
+        const miss = state.assignments.filter(a=>!(a.submitted && a.submitted[String(s)]) ).map(a=>a.name+`(${a.date})`).join('; ');
+        return {座號:s, 未交: miss};
+      }).filter(r=>r.未交.length>0);
+      const ws2 = XLSX.utils.json_to_sheet(rows2);
+      XLSX.utils.book_append_sheet(wb, ws2, '學生未交');
+      XLSX.writeFile(wb, 'homework_report.xlsx');
+    }
+
+    // export PDF
+    document.getElementById('exportPdf').onclick = ()=>{
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
+      let y = 10;
+      doc.setFontSize(12); doc.text('作業未交報表', 10, y); y+=6;
+      state.assignments.forEach(a=>{
+        const missing = state.students.filter(s=>!(a.submitted && a.submitted[String(s)]) );
+        if(missing.length===0) return;
+        doc.setFontSize(10);
+        doc.text(`${a.name} (${a.date}): ${missing.join(', ')}`, 10, y);
+        y+=6; if(y>280){ doc.addPage(); y=10; }
+      });
+      doc.addPage(); y=10; doc.text('學生未交報表',10,y); y+=6;
+      state.students.forEach(s=>{
+        const miss = state.assignments.filter(a=>!(a.submitted && a.submitted[String(s)]) ).map(a=>a.name+`(${a.date})`);
+        if(miss.length===0) return;
+        doc.text(`座號 ${s}: ${miss.join('; ')}`, 10, y);
+        y+=6; if(y>280){ doc.addPage(); y=10; }
+      });
+      doc.save('homework_report.pdf');
+    }
+
+    // 班級管理初始化
+    function renderClassSelect(){
+      const sel = document.getElementById('classSelect');
+      const list = loadClasses();
+      sel.innerHTML='';
+      list.forEach(c=>{
+        const opt=document.createElement('option'); opt.value=c; opt.textContent=c;
+        if(c===CURRENT_CLASS) opt.selected=true;
+        sel.appendChild(opt);
+      });
+    }
+    document.getElementById('addClass').onclick = ()=>{
+      const name = document.getElementById('newClassName').value.trim();
+      if(!name){ alert('請輸入班級名稱'); return; }
+      const list = loadClasses(); if(list.includes(name)){ alert('班級已存在'); return; }
+      list.push(name); saveClasses(list);
+      CURRENT_CLASS = name; state = loadStateForCurrentClass(); saveStateForCurrentClass(state);
+      renderClassSelect(); renderAll(); document.getElementById('newClassName').value='';
+    }
+    document.getElementById('classSelect').onchange = (e)=>{
+      CURRENT_CLASS = e.target.value;
+      state = loadStateForCurrentClass(); renderAll();
+    }
+    document.getElementById('deleteClass').onclick = ()=>{
+      if(!CURRENT_CLASS){ alert('尚未選擇班級'); return; }
+      if(!confirm('確定刪除此班級？')) return;
+      const list = loadClasses().filter(c=>c!==CURRENT_CLASS);
+      saveClasses(list);
+      localStorage.removeItem(classKey(CURRENT_CLASS));
+      CURRENT_CLASS = list[0] || null;
+      state = loadStateForCurrentClass(); renderClassSelect(); renderAll();
+    }
+
+    renderClassSelect();
+
+    // initial demo state (only if empty)
+    if(state.students.length===0 && state.assignments.length===0){
+      // don't prefill automatically; leave blank for teacher to input
+    }
+
+    renderAll();
+  </script>
+</body>
+</html>
